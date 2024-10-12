@@ -4,21 +4,21 @@
 #include <cstdint>
 
 // Enum to define opcodes
-enum class Opcode : uint8_t {
-    ADD = 0x01, SUB = 0x02, MUL = 0x03, DIV = 0x04,
-    INC = 0x05, DEC = 0x06, AND = 0x07, OR = 0x08,
-    XOR = 0x09, NOT = 0x0A, JMP = 0x0B, BEQ = 0x0C,
-    BNE = 0x0D, CALL = 0x0E, RET = 0x0F, LD = 0x10,
-    ST = 0x11, FFT = 0x12, ENC = 0x13, DECRYPT = 0x15
+enum class opcode : uint8_t {
+    add = 0x01, sub = 0x02, mul = 0x03, div = 0x04,
+    inc = 0x05, dec = 0x06, and_op = 0x07, or_op = 0x08,
+    xor_op = 0x09, not_op = 0x0A, jmp = 0x0B, beq = 0x0C,
+    bne = 0x0D, call = 0x0E, ret = 0x0F, ld = 0x10,
+    st = 0x11, fft = 0x12, enc = 0x13, decrypt = 0x15
 };
 
-// Register File class to manage CPU registers
-class RegisterFile {
+// Register file to manage CPU registers
+class register_file {
 private:
     std::vector<uint32_t> registers;
 
 public:
-    RegisterFile(size_t size = 16) : registers(size, 0) {}
+    register_file(size_t size = 16) : registers(size, 0) {}
 
     void set(uint8_t index, uint32_t value) {
         if (index < registers.size())
@@ -26,38 +26,32 @@ public:
     }
 
     uint32_t get(uint8_t index) const {
-        if (index < registers.size())
-            return registers[index];
-        return 0;
+        return (index < registers.size()) ? registers[index] : 0;
     }
 };
 
 // Memory class to handle memory operations
-class Memory {
+class memory {
 private:
-    std::vector<uint32_t> memory;
+    std::vector<uint32_t> mem;
 
 public:
-    Memory(size_t size = 1024) : memory(size, 0) {}
+    memory(size_t size = 1024) : mem(size, 0) {}
 
     void set(uint16_t address, uint32_t value) {
-        if (address < memory.size())
-            memory[address] = value;
+        if (address < mem.size())
+            mem[address] = value;
     }
 
     uint32_t get(uint16_t address) const {
-        if (address < memory.size())
-            return memory[address];
-        return 0;
+        return (address < mem.size()) ? mem[address] : 0;
     }
 
-    size_t getSize() const {
-        return memory.size();
-    }
+    size_t size() const { return mem.size(); }
 };
 
-// Arithmetic Logic Unit (ALU) to perform operations
-class ALU {
+// ALU class to perform operations
+class alu {
 public:
     uint32_t add(uint32_t a, uint32_t b) { return a + b; }
     uint32_t sub(uint32_t a, uint32_t b) { return a - b; }
@@ -68,85 +62,84 @@ public:
 };
 
 // CPU class to integrate all components
-class CPU {
+class cpu {
 private:
-    RegisterFile regFile;
-    Memory memory;
-    ALU alu;
+    register_file reg_file;
+    memory mem;
+    alu alu_unit;
     uint32_t pc = 0;
-    std::stack<uint32_t> callStack;
+    std::stack<uint32_t> call_stack;
 
 public:
-    CPU(size_t memorySize = 1024) : memory(memorySize) {}
+    cpu(size_t mem_size = 1024) : mem(mem_size) {}
 
-    Memory& getMemory() { return memory; }
-    RegisterFile& getRegisterFile() { return regFile; }
+    memory& get_memory() { return mem; }
+    register_file& get_register_file() { return reg_file; }
 
-    void fetchAndExecute() {
-        uint32_t instr = memory.get(pc++);
-        uint8_t rawOpcode = instr >> 24;
-        Opcode opcode = static_cast<Opcode>(rawOpcode);
+    void fetch_and_execute() {
+        uint32_t instr = mem.get(pc++);
+        uint8_t raw_opcode = instr >> 24;
+        opcode op = static_cast<opcode>(raw_opcode);
         uint8_t r1 = (instr >> 16) & 0xFF;
         uint8_t r2 = (instr >> 8) & 0xFF;
         uint8_t r3 = instr & 0xFF;
 
-        // Debugging: Print the raw opcode and instruction
-        std::cout << "Instruction: " << instr << ", Raw Opcode: " << static_cast<uint32_t>(rawOpcode) << std::endl;
+        std::cout << "Instruction: " << instr
+                  << ", Raw Opcode: " << static_cast<uint32_t>(raw_opcode) << std::endl;
 
-        switch (opcode) {
-            case Opcode::ADD:
-                regFile.set(r1, alu.add(regFile.get(r2), regFile.get(r3)));
+        switch (op) {
+            case opcode::add:
+                reg_file.set(r1, alu_unit.add(reg_file.get(r2), reg_file.get(r3)));
                 break;
-            case Opcode::INC:
-                regFile.set(r1, alu.inc(regFile.get(r1)));
+            case opcode::inc:
+                reg_file.set(r1, alu_unit.inc(reg_file.get(r1)));
                 break;
-            case Opcode::ST:
-                memory.set(r1, regFile.get(r2));
+            case opcode::st:
+                mem.set(r1, reg_file.get(r2));
                 break;
-            case Opcode::CALL:
-                callStack.push(pc);
+            case opcode::call:
+                call_stack.push(pc);
                 pc = r1;
                 break;
-            case Opcode::RET:
-                if (!callStack.empty()) {
-                    pc = callStack.top();
-                    callStack.pop();
+            case opcode::ret:
+                if (!call_stack.empty()) {
+                    pc = call_stack.top();
+                    call_stack.pop();
                 }
                 break;
-            case Opcode::LD:
-                regFile.set(r1, memory.get(r2));
+            case opcode::ld:
+                reg_file.set(r1, mem.get(r2));
                 break;
             default:
-                std::cerr << "Unknown opcode: " << static_cast<uint32_t>(rawOpcode) << std::endl;
+                std::cerr << "Unknown opcode: " << static_cast<uint32_t>(raw_opcode) << std::endl;
                 exit(1);
         }
     }
 
     void run() {
-        while (pc < memory.getSize()) {
-            fetchAndExecute();
+        while (pc < mem.size()) {
+            fetch_and_execute();
         }
     }
 };
 
 int main() {
-    CPU cpu(1024);
+    cpu cpu_unit(1024);
 
     // Load instructions into memory
-    cpu.getMemory().set(0, (static_cast<uint32_t>(Opcode::LD) << 24) | (1 << 16) | 100);  // LD r1, [100]
-    cpu.getMemory().set(1, (static_cast<uint32_t>(Opcode::INC) << 24) | (1 << 16));        // INC r1
-    cpu.getMemory().set(2, (static_cast<uint32_t>(Opcode::ST) << 24) | (1 << 16) | 101);   // ST [101], r1
-    cpu.getMemory().set(3, (static_cast<uint32_t>(Opcode::ADD) << 24) | (2 << 16) | (1 << 8) | 1);  // ADD r2, r1, r1
-    cpu.getMemory().set(4, (static_cast<uint32_t>(Opcode::CALL) << 24) | 10);              // CALL 10
-    cpu.getMemory().set(10, (static_cast<uint32_t>(Opcode::RET) << 24));                   // RET
+    cpu_unit.get_memory().set(0, (static_cast<uint32_t>(opcode::ld) << 24) | (1 << 16) | 100);  // LD r1, [100]
+    cpu_unit.get_memory().set(1, (static_cast<uint32_t>(opcode::inc) << 24) | (1 << 16));        // INC r1
+    cpu_unit.get_memory().set(2, (static_cast<uint32_t>(opcode::st) << 24) | (1 << 16) | 101);   // ST [101], r1
+    cpu_unit.get_memory().set(3, (static_cast<uint32_t>(opcode::add) << 24) | (2 << 16) | (1 << 8) | 1);  // ADD r2, r1, r1
+    cpu_unit.get_memory().set(4, (static_cast<uint32_t>(opcode::call) << 24) | 10);              // CALL 10
+    cpu_unit.get_memory().set(10, (static_cast<uint32_t>(opcode::ret) << 24));                   // RET
 
     // Run the CPU
-    cpu.run();
+    cpu_unit.run();
 
     // Output register values
-    std::cout << "Register r1: " << cpu.getRegisterFile().get(1) << std::endl;
-    std::cout << "Register r2: " << cpu.getRegisterFile().get(2) << std::endl;
+    std::cout << "Register r1: " << cpu_unit.get_register_file().get(1) << std::endl;
+    std::cout << "Register r2: " << cpu_unit.get_register_file().get(2) << std::endl;
 
     return 0;
 }
-
